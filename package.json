@@ -13,7 +13,7 @@
     "notifier-server": "./bin/notifier-server"
   },
   "engines": {
-    "node": "*"
+    "node": ">=10"
   },
   "dependencies": {
     "async": "^1.4.2",

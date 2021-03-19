@@ -80,7 +80,15 @@ function makeExec( filename ) {
 			}
 			subject += "Deployment: " + filename + " " + commit + " " + ((Date.now() - started)/1000).toFixed(0) + "s";
 			mailer( subject, output + "\nExit Code: " + exit );
-			callback( null, { subject: subject, filename: filename, eventData: eventData, output: output, exit: exit, time: Date.now() - started, started: started });
+			callback( null, {
+				subject: subject,
+				filename: filename,
+				eventData: eventData,
+				output: output,
+				exit: exit,
+				time: Date.now() - started,
+				started: started
+			});
 		});
 	});
 
