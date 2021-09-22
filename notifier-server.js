@@ -26,11 +26,12 @@ var mailer,
 var debug = require( "debug" );
 var async = require( "async" );
 
+debug.enable( "notifier-server:error" );
+
 if (argv.debug) {
 	debug.enable( "notifier-server:*" );
 }
 
-debug.enable( "notifier-server:error" );
 var error = debug( "notifier-server:error" );
 
 var log = debug( "notifier-server:server" ),
