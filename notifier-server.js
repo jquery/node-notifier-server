@@ -1,137 +1,146 @@
-var mailer,
-	root = require( "path" ).dirname( __filename ),
-	directory = root + "/notifier.d",
-	os = require( "os" ),
-	opts = require( "optimist" )
-		.usage( "Start a server to listen for github post receives and execute scripts from a directory\n\t$0" )
-		.options( "p", {
-			alias: "port",
-			"default": 3333,
-			describe: "Port number for server"
-		})
-		.options( "d", {
-			alias: "directory",
-			"default": directory
-		})
-		.boolean( "debug" )
-		.describe( "debug", "Enable Debug" ),
-	argv = opts.argv,
-	port = argv.p,
-	http = require( "http" ),
-	Notifier = require( "git-notifier" ).Notifier,
-	notifier = new Notifier(),
-	server = http.createServer(),
-	fs = require( "fs" ),
-	proc = require( "child_process" );
-var debug = require( "debug" );
-var async = require( "async" );
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+const cp = require('child_process');
 
-debug.enable( "notifier-server:error" );
+const async = require('async');
+const debug = require('debug');
 
-if (argv.debug) {
-	debug.enable( "notifier-server:*" );
+const Notifier = require('./github-notifier.js').Notifier;
+const invalidSHA = /[^0-9a-f]/;
+
+function makeExec (directory, filename) {
+  const log = debug('notifier-server:script:' + filename);
+
+  function doLog (prefix, text) {
+    const parts = ('' + text).split(/\n/);
+    parts.forEach(function (line) {
+      if (line.length) {
+        log(prefix, line);
+      }
+    });
+  }
+
+  // Use an async queue so that if we receive multiple events for the same repo,
+  // we let the corresponding shell scripts run serially. Scripts may assume that
+  // - Their project directory will not be operated on by other instances of self.
+  // - No events will be skipped or considered redundant. Thus if they only react
+  //   to certain commits or file changes, they can do so without state.
+  // - The script exec for the "last" event reliably finishes last. This is
+  //   especially important for scripts that deploy services.
+  const queue = async.queue(function spawn (eventData, callback) {
+    const commit = eventData.commit;
+    log('spawn', commit);
+
+    const proc = cp.spawn(directory + '/' + filename, [commit]);
+    proc.stdout.on('data', function (data) {
+      doLog('out', data);
+    });
+    proc.stderr.on('data', function (data) {
+      doLog('err', data);
+    });
+    proc.on('exit', function (code) {
+      log('exit', code);
+    });
+    proc.on('close', function () {
+      // Ignore errors
+      callback(null);
+    });
+  });
+
+  queue.drain = function () {
+    log('done');
+  };
+
+  return function (data) {
+    if (invalidSHA.test(data.commit)) {
+      log('Bad Request', data);
+      return;
+    }
+
+    log('queue', data.commit);
+    queue.push(data);
+  };
 }
 
-var error = debug( "notifier-server:error" );
+/**
+ * @param {Object} argv
+ * @param {number} argv.port
+ * @param {string} argv.directory
+ * @param {boolean} [argv.debug=false]
+ * @return {Promise<http.Server>}
+ */
+function start (argv) {
+  const port = argv.port;
+  const directory = argv.directory;
 
-var log = debug( "notifier-server:server" ),
-	invalidSHA = /[^0-9a-f]/;
+  const notifier = new Notifier();
+  const server = http.createServer();
 
-if ( fs.existsSync( "./mail-config.json" ) ) {
-	log( "Loading E-Mail Component" );
-	mailer = require( "./notify-mail.js" );
-} else {
-	// without mail config, mailer is a noop
-	mailer = function() {};
+  debug.enable('notifier-server:error');
+  if (argv.debug) {
+    debug.enable('notifier-server:*');
+  }
+
+  const error = debug('notifier-server:error');
+  const log = debug('notifier-server:server');
+
+  fs.readdirSync(directory).forEach(function (file) {
+    if (!/\.js$/.exec(file)) {
+      return;
+    }
+    log('Including ' + directory + '/' + file);
+    const js = directory + '/' + file;
+    const sh = file.replace(/\.js$/, '.sh');
+    require(js)(notifier, makeExec(directory, sh));
+  });
+
+  server.on('request', notifier.handler);
+  server.on('error', error);
+  notifier.on('error', error);
+
+  return new Promise(function (resolve, reject) {
+    server.on('error', function (e) {
+      reject(e);
+    });
+    server.on('listening', function () {
+      log('The notifier-server is listening on port ' + server.address().port);
+      resolve(server);
+    });
+    server.listen(port);
+  });
 }
 
-directory = argv.d;
+function cli () {
+  const optimist = require('optimist');
+  const opts = optimist
+    .usage('Start a server that listens for GitHub web hooks and execute scripts from a directory\n\t$0')
+    .options('port', {
+      alias: 'p',
+      default: 3333,
+      describe: 'Port number for HTTP server'
+    })
+    .options('directory', {
+      alias: 'd',
+      default: path.join(__dirname, 'notifier.d')
+    })
+    .options('debug', {
+      type: 'boolean',
+      describe: 'Enable verbose logging'
+    })
+    .options('help', {
+      alias: 'h',
+      type: 'boolean',
+      describe: 'Display usage information'
+    });
+  const argv = opts.argv;
 
-if ( argv.h ) {
-	console.log( opts.help() );
-	process.exit();
+  if (argv.help) {
+    console.log(opts.help());
+    process.exit();
+  }
+
+  start(argv);
 }
 
-function makeExec( filename ) {
-	var log = debug( "notifier-server:script:" + filename );
-	var queue = async.queue(function spawn(eventData, callback) {
-		var commit = eventData.commit;
-		log( "spawn", commit );
-		var output = "",
-			exit = -1,
-			started = Date.now();
-
-		var process = proc.spawn( directory + "/" + filename, [ commit ] );
-		process.stdout.on( "data", function( data ) {
-			output += data;
-			doLog( "out", data );
-		});
-		process.stderr.on( "data", function( data ) {
-			output += data;
-			doLog( "err", data );
-		});
-		process.on( "exit", function( code ) {
-			exit = code;
-			log( "exit", code );
-		});
-		process.on( "close", function() {
-			var subject = os.hostname() + ": ";
-			if (exit) {
-				subject += "FAILED ";
-			}
-			subject += "Deployment: " + filename + " " + commit + " " + ((Date.now() - started)/1000).toFixed(0) + "s";
-			mailer( subject, output + "\nExit Code: " + exit );
-			callback( null, {
-				subject: subject,
-				filename: filename,
-				eventData: eventData,
-				output: output,
-				exit: exit,
-				time: Date.now() - started,
-				started: started
-			});
-		});
-	});
-
-	queue.drain = function() { log( "done" ); };
-
-	function doLog( prefix, text ) {
-		var parts = ("" + text).split(/\n/);
-		parts.forEach(function( line ) {
-			if ( line.length ) {
-				log( prefix, line );
-			}
-		});
-	}
-
-	return function( data, callback ) {
-		if ( invalidSHA.test( data.commit ) ) {
-			log( "Bad Request", data );
-			return;
-		}
-
-		log( "queue", data.commit );
-		if (callback) {
-			queue.push( data, callback );
-		} else {
-			queue.push( data );
-		}
-	};
-}
-
-fs.readdirSync( directory ).forEach( function( file ) {
-	if ( !/\.js$/.exec( file ) ) {
-		return;
-	}
-	log( "Including " + directory + "/" + file );
-	var js = directory + "/" + file,
-		sh = file.replace( /\.js$/, ".sh" );
-	require( js )( notifier, makeExec( sh ) );
-});
-
-server.on( "request", notifier.handler );
-server.on( "error", error );
-notifier.on( "error", error );
-
-log( "Setting up post-receive server on port " + port );
-server.listen( port );
+module.exports = { start, cli };

@@ -1,0 +1,10 @@
+{
+  "root": true,
+
+  "extends": "semistandard",
+
+  "env": {
+    "node": true,
+    "es2017": true
+  }
+}

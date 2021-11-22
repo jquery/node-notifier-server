@@ -1,5 +1,3 @@
-node_modules
-notifier.d/*.js
-notifier.d/*.sh
-mail-config.json
-test.js
+/node_modules
+/notifier.d/*.js
+/notifier.d/*.sh
