@@ -1,14 +1,7 @@
+const crypto = require('crypto');
 const querystring = require('querystring');
 const util = require('util');
 const EventEmitter2 = require('eventemitter2').EventEmitter2;
-
-function xHeader (str) {
-  str = str.substring(2);
-
-  return str.replace(/-([a-z])/gi, function (all, letter) {
-    return letter.toUpperCase();
-  });
-}
 
 function Notifier () {
   EventEmitter2.call(this, {
@@ -16,27 +9,34 @@ function Notifier () {
     delimiter: '/'
   });
 
+  // Pre-bind to ease usage as a callback
   this.handler = this.handler.bind(this);
 }
 util.inherits(Notifier, EventEmitter2);
 
+/**
+ * @param {http.IncomingMessage} request <https://nodejs.org/docs/latest-v12.x/api/http.html#http_class_http_incomingmessage>
+ * @param {http.ServerResponse} response <https://nodejs.org/docs/latest-v12.x/api/http.html#http_class_http_serverresponse
+ */
 Notifier.prototype.handler = function (request, response) {
   const notifier = this;
-  let data = '';
-  const headers = {};
+  let body = '';
 
   request.setEncoding('utf8');
   request.on('data', function (chunk) {
-    data += chunk;
+    body += chunk;
   });
 
   request.on('end', function () {
+    let payload;
+    let data;
     try {
       if (request.headers['content-type'] === 'application/x-www-form-urlencoded') {
-        data = querystring.parse(data);
-        data = data.payload;
+        payload = querystring.parse(body).payload;
+      } else {
+        payload = body;
       }
-      data = JSON.parse(data);
+      data = JSON.parse(payload);
     } catch (error) {
       // Invalid data, stop processing
       response.writeHead(400);
@@ -46,26 +46,39 @@ Notifier.prototype.handler = function (request, response) {
     }
 
     // Accept the request and close the connection
+    // SECURITY: We decide on and close the response regardless of,
+    // and prior to, any secret-based signature validation, so as to not
+    // expose details about this to external clients.
     response.writeHead(202);
     response.end();
 
-    // Parse the headers
-    Object.keys(request.headers).forEach(function (header) {
-      if (/^x-/.test(header)) {
-        headers[xHeader(header)] = request.headers[header];
-      }
-    });
-
     notifier.process({
+      payload: payload,
       data: data,
-      headers: headers
+      headers: request.headers
     });
   });
 };
 
-Notifier.prototype.process = function (payload) {
-  const eventType = payload.headers.githubEvent;
+Notifier.prototype.process = function (req) {
+  const secret = process.env.WEBHOOK_SECRET;
+  if (secret) {
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(req.payload);
+    const expected = Buffer.from('sha256=' + hmac.digest('hex'));
+    const actual = Buffer.from(req.headers['x-hub-signature-256'] || '');
+    if (actual.length !== expected.length) {
+      // Invalid signature, discard misformatted signature
+      // that can't be compared with timingSafeEqual()
+      return;
+    }
+    if (!crypto.timingSafeEqual(actual, expected)) {
+      // Invalid signature, discard unauthorized event
+      return;
+    }
+  }
 
+  const eventType = req.headers['x-github-event'];
   // Ignore ping events that are sent when a new webhook is created
   if (eventType === 'ping') {
     return;
@@ -73,15 +86,14 @@ Notifier.prototype.process = function (payload) {
 
   // Handle event-specific processing
   const processor = this.processors[eventType] || this.processors._default;
-  const eventInfo = processor(payload);
+  const eventInfo = processor(req);
   const event = eventInfo.data;
 
   // Handle common properties
-  const repository = payload.data.repository;
+  const repository = req.data.repository;
   event.type = eventType;
   event.owner = repository.owner.login || repository.owner.name;
   event.repo = repository.name;
-  event.payload = payload.data;
 
   // Emit event rooted on the owner/repo
   let eventName = event.owner + '/' + event.repo + '/' + event.type;
@@ -93,29 +105,14 @@ Notifier.prototype.process = function (payload) {
 
 Notifier.prototype.processors = {};
 
-Notifier.prototype.processors._default = function (payload) {
+Notifier.prototype.processors._default = function (req) {
   return {
     data: {}
   };
 };
 
-Notifier.prototype.processors.pull_request = function (payload) {
-  const pullRequest = payload.data.pull_request;
-  const base = pullRequest.base.sha;
-  const head = pullRequest.head.sha;
-
-  return {
-    data: {
-      pr: payload.data.number,
-      base: base,
-      head: head,
-      range: base + '..' + head
-    }
-  };
-};
-
-Notifier.prototype.processors.push = function (payload) {
-  const raw = payload.data;
+Notifier.prototype.processors.push = function (req) {
+  const raw = req.data;
   const refParts = raw.ref.split('/');
   const type = refParts[1];
 
