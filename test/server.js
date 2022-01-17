@@ -68,8 +68,13 @@ QUnit.module('notifier-server', hooks => {
     const done = assert.async();
     function subscriber (notifier) {
       notifier.on('example/test/push/heads/main', function (data) {
-        assert.strictEqual(data.commit, 'f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2', 'callback data.commit');
-        assert.strictEqual(data.branch, 'main', 'callback data.branch');
+        assert.propEqual(data, {
+          owner: 'example',
+          repo: 'test',
+          type: 'push',
+          commit: 'f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2',
+          branch: 'main'
+        }, 'callback data');
         done();
       });
     }
@@ -77,7 +82,9 @@ QUnit.module('notifier-server', hooks => {
 
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
-    util.request(address, util.mocks.examplePushBranch);
+    const resp = await util.request(address, util.mocks.examplePushBranch);
+
+    assert.strictEqual(resp.statusCode, 202, 'status code');
   });
 
   QUnit.test('emit correct event after "push" webhook with tag', async assert => {
@@ -93,7 +100,9 @@ QUnit.module('notifier-server', hooks => {
 
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
-    util.request(address, util.mocks.examplePushTag);
+    const resp = await util.request(address, util.mocks.examplePushTag);
+
+    assert.strictEqual(resp.statusCode, 202, 'status code');
   });
 
   QUnit.test('emit correct event after "push" webhook with tag and correct signature', async assert => {
@@ -110,7 +119,9 @@ QUnit.module('notifier-server', hooks => {
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
     process.env.WEBHOOK_SECRET = util.mocks.securePushTagSigned.secret;
-    util.request(address, util.mocks.securePushTagSigned);
+    const resp = await util.request(address, util.mocks.securePushTagSigned);
+
+    assert.strictEqual(resp.statusCode, 202, 'status code');
   });
 
   QUnit.test('exec shell script after after "push" webhook with branch', async assert => {
@@ -139,7 +150,7 @@ echo "Received arg $1" > "${tmpDir}/example.out";
   QUnit.test('secure notifier ignores "push" webhook with tag and no signature', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/heads/main', function () {
+      notifier.on('example/test/push/heads/main', function () {
         called++;
       });
     }
@@ -148,19 +159,20 @@ echo "Received arg $1" > "${tmpDir}/example.out";
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
     process.env.WEBHOOK_SECRET = util.mocks.securePushTagUnsigned.secret;
-    util.request(address, util.mocks.securePushTagUnsigned);
+    const resp = await util.request(address, util.mocks.securePushTagUnsigned);
 
     const done = assert.async();
     setTimeout(() => {
       done();
       assert.strictEqual(called, 0);
+      assert.strictEqual(resp.statusCode, 202, 'status code');
     }, 500);
   });
 
   QUnit.test('secure notifier ignores "push" webhook with tag and bad signature', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/heads/main', function () {
+      notifier.on('example/test/push/heads/main', function () {
         called++;
       });
     }
@@ -181,7 +193,7 @@ echo "Received arg $1" > "${tmpDir}/example.out";
   QUnit.test('notifier for branch ignores "push" webhook with tag', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/heads/main', function () {
+      notifier.on('example/test/push/heads/main', function () {
         called++;
       });
     }
@@ -201,7 +213,7 @@ echo "Received arg $1" > "${tmpDir}/example.out";
   QUnit.test('notifier for tag ignores "push" webhook with branch', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/tags/*', function () {
+      notifier.on('example/test/push/tags/*', function () {
         called++;
       });
     }
@@ -221,7 +233,7 @@ echo "Received arg $1" > "${tmpDir}/example.out";
   QUnit.test('notifier ignores "push" webhook with different repo', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/heads/main', function () {
+      notifier.on('example/different-test/push/heads/main', function () {
         called++;
       });
     }
@@ -241,7 +253,7 @@ echo "Received arg $1" > "${tmpDir}/example.out";
   QUnit.test('notifier ignores "ping" webhook', async assert => {
     let called = 0;
     function subscriber (notifier) {
-      notifier.on('example/not-test/push/heads/main', function () {
+      notifier.on('example/test/push/heads/main', function () {
         called++;
       });
     }
@@ -249,12 +261,55 @@ echo "Received arg $1" > "${tmpDir}/example.out";
 
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
-    util.request(address, util.mocks.examplePing);
+    const resp = await util.request(address, util.mocks.examplePing);
 
     const done = assert.async();
     setTimeout(() => {
       done();
       assert.strictEqual(called, 0);
+      assert.strictEqual(resp.statusCode, 202, 'status code');
+    }, 500);
+  });
+
+  QUnit.test('notifier ignores too large json', async assert => {
+    let called = 0;
+    function subscriber (notifier) {
+      notifier.on('example/test/push/heads/main', function () {
+        called++;
+      });
+    }
+    util.writeExportedJs(tmpDir, 'example.js', subscriber);
+
+    const server = await startServer();
+    const address = `http://localhost:${server.address().port}`;
+    const resp = await util.request(address, util.mocks.badLargeJson);
+
+    const done = assert.async();
+    setTimeout(() => {
+      done();
+      assert.strictEqual(called, 0);
+      assert.strictEqual(resp.statusCode, 413, 'status code');
+    }, 500);
+  });
+
+  QUnit.test('notifier ignores invalid json syntax', async assert => {
+    let called = 0;
+    function subscriber (notifier) {
+      notifier.on('example/test/push/heads/main', function () {
+        called++;
+      });
+    }
+    util.writeExportedJs(tmpDir, 'example.js', subscriber);
+
+    const server = await startServer();
+    const address = `http://localhost:${server.address().port}`;
+    const resp = await util.request(address, util.mocks.badInvalidJson);
+
+    const done = assert.async();
+    setTimeout(() => {
+      done();
+      assert.strictEqual(called, 0);
+      assert.strictEqual(resp.statusCode, 400, 'status code');
     }, 500);
   });
 });

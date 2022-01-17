@@ -4,6 +4,7 @@ const path = require('path');
 const cp = require('child_process');
 
 const async = require('async');
+const program = require('commander');
 const debug = require('debug');
 
 const Notifier = require('./github-notifier.js').Notifier;
@@ -22,7 +23,7 @@ function makeExec (directory, filename) {
   }
 
   // Use an async queue so that if we receive multiple events for the same repo,
-  // we let the corresponding shell scripts run serially. Scripts may assume that
+  // we let the corresponding shell scripts run serially. Scripts may assume that:
   // - Their project directory will not be operated on by other instances of self.
   // - No events will be skipped or considered redundant. Thus if they only react
   //   to certain commits or file changes, they can do so without state.
@@ -32,7 +33,7 @@ function makeExec (directory, filename) {
     const commit = eventData.commit;
     log('spawn', commit);
 
-    const proc = cp.spawn(directory + '/' + filename, [commit]);
+    const proc = cp.spawn(path.join(directory, filename), [commit]);
     proc.stdout.on('data', function (data) {
       doLog('out', data);
     });
@@ -64,21 +65,28 @@ function makeExec (directory, filename) {
 }
 
 /**
- * @param {Object} argv
- * @param {number} argv.port
- * @param {string} argv.directory
- * @param {boolean} [argv.debug=false]
+ * @param {Object} opts
+ * @param {number} opts.port
+ * @param {string} opts.directory
+ * @param {boolean} [opts.debug=false]
  * @return {Promise<http.Server>}
  */
-function start (argv) {
-  const port = argv.port;
-  const directory = argv.directory;
+function start (opts) {
+  const port = opts.port;
+  const directory = opts.directory;
+
+  // Limits:
+  // * Timeout: 5s max socket inactivity <https://nodejs.org/api/http.html#servertimeout>.
+  // * Headers timeout: 60s in total [default] <https://nodejs.org/api/http.html#serverheaderstimeout>.
+  // * Keep-alive timeout: 5s [default] <https://nodejs.org/api/http.html#serverkeepalivetimeout>.
+  // * Body length: 200KB (enforced by github-notifier.js#Notifier-handler).
+  const server = http.createServer();
+  server.timeout = 5000;
 
   const notifier = new Notifier();
-  const server = http.createServer();
 
   debug.enable('notifier-server:error');
-  if (argv.debug) {
+  if (opts.debug) {
     debug.enable('notifier-server:*');
   }
 
@@ -86,11 +94,11 @@ function start (argv) {
   const log = debug('notifier-server:server');
 
   fs.readdirSync(directory).forEach(function (file) {
-    if (!/\.js$/.exec(file)) {
+    if (!/\.js$/.test(file)) {
       return;
     }
-    log('Including ' + directory + '/' + file);
-    const js = directory + '/' + file;
+    const js = path.join(directory, file);
+    log('Including ' + js);
     const sh = file.replace(/\.js$/, '.sh');
     require(js)(notifier, makeExec(directory, sh));
   });
@@ -111,36 +119,43 @@ function start (argv) {
   });
 }
 
-function cli () {
-  const optimist = require('optimist');
-  const opts = optimist
-    .usage('Start a server that listens for GitHub web hooks and execute scripts from a directory\n\t$0')
-    .options('port', {
-      alias: 'p',
-      default: 3333,
-      describe: 'Port number for HTTP server'
-    })
-    .options('directory', {
-      alias: 'd',
-      default: path.join(__dirname, 'notifier.d')
-    })
-    .options('debug', {
-      type: 'boolean',
-      describe: 'Enable verbose logging'
-    })
-    .options('help', {
-      alias: 'h',
-      type: 'boolean',
-      describe: 'Display usage information'
-    });
-  const argv = opts.argv;
+/** @param {string} value */
+function parseOptPort (value) {
+  const num = +value;
+  if (num < 1024 || num > 49151) {
+    throw new program.InvalidOptionArgumentError('Port must be between 1024-49151.');
+  }
+  return num;
+}
 
-  if (argv.help) {
-    console.log(opts.help());
-    process.exit();
+/** @param {string} value */
+function parseOptDir (value) {
+  try {
+    const stat = fs.statSync(value);
+    if (stat.isDirectory()) {
+      return value;
+    }
+  } catch (e) {
   }
 
-  start(argv);
+  throw new program.InvalidOptionArgumentError('Directory must exist.');
+}
+
+function cli () {
+  program._name = 'notifier-server';
+  program
+    .description('Start a server that listens for GitHub web hooks and execute scripts from a directory')
+    .option('-p, --port <number>', 'port number for HTTP server', parseOptPort, 3333)
+    .option('-d, --directory <path>', 'directory with subscriber scripts', parseOptDir,
+      path.join(__dirname, 'notifier.d')
+    )
+    .option('--debug', 'enable verbose logging')
+    // --help is included by default
+    // The parse() method will exit early for help or invalid arg error.
+    .parse(process.argv);
+
+  const opts = program.opts();
+  start(opts);
 }
 
 module.exports = { start, cli };

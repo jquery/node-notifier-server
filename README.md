@@ -55,9 +55,9 @@ Parameters:
 
 * `callback.data {Object}`:
   For all events:
-  - `type {string}`: webhook event type.
   - `owner {string}`: repo owner.
   - `repo {string}`: repo name.
+  - `type {string}`: webhook event type.
 
   For "push" events:
   - `commit {string}`: The head SHA1 of the pushed commit reference.

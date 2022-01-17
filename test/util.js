@@ -22,7 +22,6 @@ module.exports = {
           name: 'test',
           full_name: 'example/test',
           owner: {
-            name: 'example',
             login: 'example'
           }
         },
@@ -44,7 +43,6 @@ module.exports = {
           name: 'test',
           full_name: 'example/test',
           owner: {
-            name: 'example',
             login: 'example'
           }
         },
@@ -58,9 +56,9 @@ module.exports = {
       headers: {
         'content-type': 'application/json',
         'X-GitHub-Event': 'push',
-        'X-Hub-Signature-256': 'sha256=a2c279d72ebdbcccaaaabfb37b58dd8323a2fb069382ef47a2064899c8b0848c'
+        'X-Hub-Signature-256': 'sha256=4947c001f7ca1c1b4d1730794e128c747909ab867ee835586baf9d15eaba0260'
       },
-      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"name":"example","login":"example"}}}'
+      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"login":"example"}}}'
     },
     securePushTagUnsigned: {
       secret: '369eff4b0391c083c723e704e27bdfb5fcd622a3',
@@ -69,7 +67,7 @@ module.exports = {
         'content-type': 'application/json',
         'X-GitHub-Event': 'push'
       },
-      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"name":"example","login":"example"}}}'
+      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"login":"example"}}}'
     },
     securePushTagBadlySigned: {
       secret: '369eff4b0391c083c723e704e27bdfb5fcd622a3',
@@ -79,7 +77,7 @@ module.exports = {
         'X-GitHub-Event': 'push',
         'X-Hub-Signature-256': 'sha256=badwolfbadwolfbadwolfbadwolfbadwolfbadwolfbadwolfbadwolfbadwolfb'
       },
-      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"name":"example","login":"example"}}}'
+      body: '{"ref":"refs/tags/v3.1.1","after":"f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2","repository":{"name":"test","owner":{"login":"example"}}}'
     },
     examplePing: {
       method: 'POST',
@@ -95,13 +93,33 @@ module.exports = {
           name: 'test',
           full_name: 'example/test',
           owner: {
-            name: 'example',
             login: 'example'
           }
         },
         created: false,
         deleted: false
       }
+    },
+    badLargeJson: {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-GitHub-Event': 'push'
+      },
+      body: {
+        a: 'x'.repeat(100 * 1000),
+        b: 'x'.repeat(100 * 1000),
+        c: 'x'.repeat(100 * 1000),
+        d: 'x'.repeat(100 * 1000)
+      }
+    },
+    badInvalidJson: {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-GitHub-Event': 'push'
+      },
+      body: '{"ref":badwolf</>'
     }
   },
 
@@ -149,12 +167,18 @@ module.exports = {
    * @param {Object<string,string>} options.headers
    * @param {string|Object} options.body JSON-encoded string, or object to be encoded as JSON
    */
-  request (url, options) {
-    const req = http.request(url, {
-      method: options.method,
-      headers: options.headers
+  async request (url, options) {
+    return new Promise((resolve, reject) => {
+      const req = http.request(url, {
+        method: options.method,
+        headers: options.headers
+      }, (response) => {
+        resolve({
+          statusCode: response.statusCode
+        });
+      });
+      req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body, null, '\t'));
+      req.end();
     });
-    req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
-    req.end();
   }
 };

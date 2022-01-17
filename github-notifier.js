@@ -3,6 +3,9 @@ const querystring = require('querystring');
 const util = require('util');
 const EventEmitter2 = require('eventemitter2').EventEmitter2;
 
+// As of Jan 2022, a typical push event with 1 commit sends 15 KB of JSON.
+const MAX_BODY_LENGTH = 200 * 1000; // 200 KB
+
 function Notifier () {
   EventEmitter2.call(this, {
     wildcard: true,
@@ -20,14 +23,24 @@ util.inherits(Notifier, EventEmitter2);
  */
 Notifier.prototype.handler = function (request, response) {
   const notifier = this;
+
   let body = '';
-
-  request.setEncoding('utf8');
-  request.on('data', function (chunk) {
+  function onData (chunk) {
     body += chunk;
-  });
 
-  request.on('end', function () {
+    if (body.length > MAX_BODY_LENGTH) {
+      notifier.emit('error', 'Payload too large');
+
+      response.writeHead(413); // HTTP 413 Payload Too Large
+      response.end();
+
+      request.off('data', onData);
+      request.off('end', onEnd);
+      request.destroy();
+    }
+  }
+
+  function onEnd () {
     let payload;
     let data;
     try {
@@ -57,7 +70,11 @@ Notifier.prototype.handler = function (request, response) {
       data: data,
       headers: request.headers
     });
-  });
+  }
+
+  request.setEncoding('utf8');
+  request.on('data', onData);
+  request.on('end', onEnd);
 };
 
 Notifier.prototype.process = function (req) {
@@ -84,21 +101,21 @@ Notifier.prototype.process = function (req) {
     return;
   }
 
-  // Handle event-specific processing
   const processor = this.processors[eventType] || this.processors._default;
-  const eventInfo = processor(req);
-  const event = eventInfo.data;
+  const processed = processor(req);
+  const event = {
+    // Handle common properties
+    owner: req.data.repository.owner.login,
+    repo: req.data.repository.name,
+    type: eventType,
 
-  // Handle common properties
-  const repository = req.data.repository;
-  event.type = eventType;
-  event.owner = repository.owner.login || repository.owner.name;
-  event.repo = repository.name;
+    ...processed.event
+  };
 
   // Emit event rooted on the owner/repo
   let eventName = event.owner + '/' + event.repo + '/' + event.type;
-  if (eventInfo.postfix) {
-    eventName += '/' + eventInfo.postfix;
+  if (processed.postfix) {
+    eventName += '/' + processed.postfix;
   }
   this.emit(eventName, event);
 };
@@ -107,27 +124,34 @@ Notifier.prototype.processors = {};
 
 Notifier.prototype.processors._default = function (req) {
   return {
-    data: {}
+    event: {}
   };
 };
 
 Notifier.prototype.processors.push = function (req) {
-  const raw = req.data;
-  const refParts = raw.ref.split('/');
-  const type = refParts[1];
+  const event = {
+    commit: req.data.after
+  };
+  let postfix = null;
 
-  const data = { commit: raw.after };
+  if (/^refs\/(heads|tags)\//.test(req.data.ref)) {
+    postfix = req.data.ref.slice(5);
 
-  if (type === 'heads') {
-    // Handle namespaced branches
-    data.branch = refParts.slice(2).join('/');
-  } else if (type === 'tags') {
-    data.tag = refParts[2];
+    const refParts = req.data.ref.split('/');
+    const refType = refParts[1];
+    // Preserve slashes in namespace-like branch names
+    const refDest = refParts.slice(2).join('/');
+
+    if (refType === 'heads') {
+      event.branch = refDest;
+    } else if (refType === 'tags') {
+      event.tag = refDest;
+    }
   }
 
   return {
-    postfix: raw.ref.substr(5),
-    data: data
+    postfix: postfix,
+    event: event
   };
 };
 
