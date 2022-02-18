@@ -6,11 +6,13 @@ const EventEmitter2 = require('eventemitter2').EventEmitter2;
 // As of Jan 2022, a typical push event with 1 commit sends 15 KB of JSON.
 const MAX_BODY_LENGTH = 200 * 1000; // 200 KB
 
-function Notifier () {
+function Notifier (config = {}) {
   EventEmitter2.call(this, {
     wildcard: true,
     delimiter: '/'
   });
+
+  this.webhookSecret = config.webhookSecret || '';
 
   // Pre-bind to ease usage as a callback
   this.handler = this.handler.bind(this);
@@ -78,7 +80,7 @@ Notifier.prototype.handler = function (request, response) {
 };
 
 Notifier.prototype.process = function (req) {
-  const secret = process.env.WEBHOOK_SECRET;
+  const secret = this.webhookSecret;
   if (secret) {
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(req.payload);

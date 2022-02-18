@@ -75,6 +75,17 @@ function start (opts) {
   const port = opts.port;
   const directory = opts.directory;
 
+  const config = {
+    webhookSecret: ''
+  };
+  const confFile = path.join(__dirname, 'config.json');
+  if (fs.existsSync(confFile)) {
+    config.webhookSecret = require('./config.json').webhookSecret || '';
+  }
+  if (process.env.WEBHOOK_SECRET) {
+    config.webhookSecret = process.env.WEBHOOK_SECRET;
+  }
+
   // Limits:
   // * Timeout: 5s max socket inactivity <https://nodejs.org/api/http.html#servertimeout>.
   // * Headers timeout: 60s in total [default] <https://nodejs.org/api/http.html#serverheaderstimeout>.
@@ -83,7 +94,7 @@ function start (opts) {
   const server = http.createServer();
   server.timeout = 5000;
 
-  const notifier = new Notifier();
+  const notifier = new Notifier(config);
 
   debug.enable('notifier-server:error');
   if (opts.debug) {

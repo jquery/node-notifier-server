@@ -34,6 +34,14 @@ When operating a public notifier server, it is recommended to only use [secure w
 
 When the `WEBHOOK_SECRET` environment variable is set, any received events that do not carry a valid signature are ignored.
 
+The secret can alternatively be configured via a `config.json` file in this directory, shaped as follows:
+
+```json
+{
+  "webhookSecret": ""
+}
+```
+
 ### `notifier.on(eventPath, callback)`
 
 Parameters:

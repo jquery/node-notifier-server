@@ -1,3 +1,4 @@
 /node_modules
 /notifier.d/*.js
 /notifier.d/*.sh
+/config.json
