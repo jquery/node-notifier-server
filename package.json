@@ -8,7 +8,7 @@
   ],
   "main": "notifier-server.js",
   "bin": {
-    "notifier-server": "./bin/notifier-server.js"
+    "notifier-server": "./bin/notifier-server"
   },
   "engines": {
     "node": ">=10"
