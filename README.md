@@ -1,4 +1,5 @@
-[![Build Status](https://github.com/jquery/node-notifier-server/actions/workflows/CI.yaml/badge.svg)](https://github.com/jquery/node-notifier-server/actions/workflows/CI.yaml) [![Tested with QUnit](https://img.shields.io/badge/tested_with-qunit-9c3493.svg)](https://qunitjs.com/)
+[![Build Status](https://github.com/jquery/node-notifier-server/actions/workflows/CI.yaml/badge.svg)](https://github.com/jquery/node-notifier-server/actions/workflows/CI.yaml)
+[![Tested with QUnit](https://img.shields.io/badge/tested_with-qunit-9c3493.svg)](https://qunitjs.com/)
 
 # node-notifier-server
 

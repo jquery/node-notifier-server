@@ -1,4 +1,5 @@
 /node_modules
+/package-lock.json
 /notifier.d/*.js
 /notifier.d/*.sh
 /config.json
