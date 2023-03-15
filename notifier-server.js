@@ -49,9 +49,9 @@ function makeExec (directory, filename) {
     });
   });
 
-  queue.drain = function () {
+  queue.drain(function () {
     log('done');
-  };
+  });
 
   return function (data) {
     if (invalidSHA.test(data.commit)) {

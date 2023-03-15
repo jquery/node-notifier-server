@@ -20,7 +20,7 @@
     "fix-lint": "eslint --fix ."
   },
   "dependencies": {
-    "async": "^1.4.2",
+    "async": "3.2.4",
     "commander": "7.2.0",
     "debug": "^2.2.0",
     "eventemitter2": "0.4.14"
