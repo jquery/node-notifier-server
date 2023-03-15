@@ -5,14 +5,22 @@ const cp = require('child_process');
 
 const async = require('async');
 const program = require('commander');
-const debug = require('debug');
 
 const Notifier = require('./github-notifier.js').Notifier;
 const invalidSHA = /[^0-9a-f]/;
 
-function makeExec (directory, filename) {
-  const log = debug('notifier-server:script:' + filename);
+function makeLogger (logFn, namespace) {
+  return function log (message) {
+    if (message instanceof Error) {
+      message = message.stack;
+    }
+    for (const line of String(message).split('\n')) {
+      logFn(`[${namespace}] ${line}`);
+    }
+  };
+}
 
+function makeExec (directory, filename, log) {
   function doLog (prefix, text) {
     const parts = ('' + text).split(/\n/);
     parts.forEach(function (line) {
@@ -69,11 +77,13 @@ function makeExec (directory, filename) {
  * @param {number} opts.port
  * @param {string} opts.directory
  * @param {boolean} [opts.debug=false]
+ * @param {Function} [opts.logFn]
  * @return {Promise<http.Server>}
  */
 function start (opts) {
   const port = opts.port;
   const directory = opts.directory;
+  const logFn = opts.logFn || console.log.bind(console);
 
   const config = {
     webhookSecret: ''
@@ -96,13 +106,8 @@ function start (opts) {
 
   const notifier = new Notifier(config);
 
-  debug.enable('notifier-server:error');
-  if (opts.debug) {
-    debug.enable('notifier-server:*');
-  }
-
-  const error = debug('notifier-server:error');
-  const log = debug('notifier-server:server');
+  const error = makeLogger(logFn, 'notifier-server:error');
+  const log = opts.debug ? makeLogger(logFn, 'notifier-server:debug') : function () {};
 
   fs.readdirSync(directory).forEach(function (file) {
     if (!/\.js$/.test(file)) {
@@ -111,7 +116,8 @@ function start (opts) {
     const js = path.join(directory, file);
     log('Including ' + js);
     const sh = file.replace(/\.js$/, '.sh');
-    require(js)(notifier, makeExec(directory, sh));
+    const logScript = opts.debug ? makeLogger(logFn, 'notifier-server:script:' + sh) : function () {};
+    require(js)(notifier, makeExec(directory, sh, logScript));
   });
 
   server.on('request', notifier.handler);

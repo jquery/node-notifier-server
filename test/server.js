@@ -3,7 +3,6 @@
 
 const fs = require('fs');
 
-const debug = require('debug');
 const kleur = require('kleur');
 const rimraf = require('rimraf');
 
@@ -12,12 +11,9 @@ const util = require('./util.js');
 
 QUnit.config.testTimeout = 1000;
 
-debug.formatArgs = function (args) {
-  args[0] = `[${this.namespace}] ${args[0]}`;
-};
-debug.log = (...args) => {
-  console.info(kleur.grey('# ' + args.join(' ')));
-};
+function logFn (message) {
+  console.info(kleur.grey('# ' + message));
+}
 
 QUnit.module('notifier-server', hooks => {
   let tmpDir = null;
@@ -42,7 +38,7 @@ QUnit.module('notifier-server', hooks => {
   });
 
   async function startServer () {
-    const server = await notifier.start({ directory: tmpDir, port: 0, debug: true });
+    const server = await notifier.start({ directory: tmpDir, port: 0, debug: true, logFn: logFn });
     servers.push(server);
     return server;
   }
