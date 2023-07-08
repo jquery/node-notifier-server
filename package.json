@@ -1,10 +1,10 @@
 {
   "private": true,
   "license": "MIT",
-  "author": "Corey Frang <gnarf37@gmail.com> (http://gnarf.net)",
+  "author": "Corey Frang <gnarf37@gmail.com>",
   "contributors": [
     "Scott González <scott.gonzalez@gmail.com> (http://scottgonzalez.com)",
-    "Timo Tijhof"
+    "Timo Tijhof (https://timotijhof.net)"
   ],
   "main": "notifier-server.js",
   "bin": {
