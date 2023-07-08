@@ -12,19 +12,21 @@ jobs:
       matrix:
         include:
           # Recent LTS
-          - node: 16.x
-          # LTS for Debian Bullseye (used on some jq servers)
+          - node: 20.x
+          # Provided by Debian 12 Bookworm LTS
+          - node: 18.x
+          # Provided by Debian 11 Bullseye LTS
           - node: 12.x
-          # LTS for Debian Buster (used on some jq servers)
+          # Provided by Debian 10 Buster LTS
           - node: 10.x
 
     name: "Test Node.js ${{ matrix.node }} "
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
 

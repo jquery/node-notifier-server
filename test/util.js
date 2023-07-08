@@ -29,6 +29,69 @@ module.exports = {
         deleted: false
       }
     },
+    examplePushA: {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-GitHub-Event': 'push'
+      },
+      body: {
+        ref: 'refs/heads/main',
+        before: '00000000',
+        after: 'aaaaaaaa',
+        repository: {
+          name: 'test',
+          full_name: 'example/test',
+          owner: {
+            login: 'example'
+          }
+        },
+        created: false,
+        deleted: false
+      }
+    },
+    examplePushB: {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-GitHub-Event': 'push'
+      },
+      body: {
+        ref: 'refs/heads/main',
+        before: 'aaaaaaaa',
+        after: 'bbbbbbbb',
+        repository: {
+          name: 'test',
+          full_name: 'example/test',
+          owner: {
+            login: 'example'
+          }
+        },
+        created: false,
+        deleted: false
+      }
+    },
+    examplePushC: {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-GitHub-Event': 'push'
+      },
+      body: {
+        ref: 'refs/heads/main',
+        before: 'bbbbbbbb',
+        after: 'cccccccc',
+        repository: {
+          name: 'test',
+          full_name: 'example/test',
+          owner: {
+            login: 'example'
+          }
+        },
+        created: false,
+        deleted: false
+      }
+    },
     examplePushTag: {
       method: 'POST',
       headers: {

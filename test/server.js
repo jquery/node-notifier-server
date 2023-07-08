@@ -143,6 +143,61 @@ echo "Received arg $1" > "${tmpDir}/example.out";
     }, 500);
   });
 
+  QUnit.test('run shell scripts sequentially through a queue', async assert => {
+    function subscriber (notifier, exec) {
+      notifier.on('example/test/push/heads/*', exec);
+    }
+    util.writeExportedJs(tmpDir, 'example.js', subscriber);
+    util.writeShellExec(tmpDir, 'example.sh', `#!/bin/bash
+SELF="$1"
+OUT="${tmpDir}/example.out"
+echo "$SELF: 0..." >> "$OUT"
+sleep 0.1
+echo "$SELF: 1..." >> "$OUT"
+sleep 0.1
+echo "$SELF: 2..." >> "$OUT"
+sleep 0.1
+echo "$SELF: 3..." >> "$OUT"
+sleep 0.1
+echo "$SELF: 4..." >> "$OUT"
+sleep 0.1
+echo "$SELF: Done!" >> "$OUT"
+    `);
+
+    const server = await startServer();
+    const address = `http://localhost:${server.address().port}`;
+    util.request(address, util.mocks.examplePushA);
+    util.request(address, util.mocks.examplePushB);
+    util.request(address, util.mocks.examplePushC);
+
+    assert.timeout(2000);
+    const done = assert.async();
+    setTimeout(() => {
+      done();
+      assert.strictEqual(
+        fs.readFileSync(`${tmpDir}/example.out`, 'utf8').toString().trim(),
+        `aaaaaaaa: 0...
+aaaaaaaa: 1...
+aaaaaaaa: 2...
+aaaaaaaa: 3...
+aaaaaaaa: 4...
+aaaaaaaa: Done!
+bbbbbbbb: 0...
+bbbbbbbb: 1...
+bbbbbbbb: 2...
+bbbbbbbb: 3...
+bbbbbbbb: 4...
+bbbbbbbb: Done!
+cccccccc: 0...
+cccccccc: 1...
+cccccccc: 2...
+cccccccc: 3...
+cccccccc: 4...
+cccccccc: Done!`
+      );
+    }, 1800);
+  });
+
   QUnit.test('secure notifier ignores "push" webhook with tag and no signature', async assert => {
     let called = 0;
     function subscriber (notifier) {
