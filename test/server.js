@@ -195,7 +195,7 @@ cccccccc: 3...
 cccccccc: 4...
 cccccccc: Done!`
       );
-    }, 1800);
+    }, 1700);
   });
 
   QUnit.test('secure notifier ignores "push" webhook with tag and no signature', async assert => {

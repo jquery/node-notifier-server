@@ -3,7 +3,6 @@ const http = require('http');
 const path = require('path');
 const cp = require('child_process');
 
-const async = require('async');
 const program = require('commander');
 
 const Notifier = require('./github-notifier.js').Notifier;
@@ -23,11 +22,11 @@ function makeLogger (logFn, namespace) {
 function makeExec (directory, filename, log) {
   function doLog (prefix, text) {
     const parts = ('' + text).split(/\n/);
-    parts.forEach(function (line) {
+    for (const line of parts) {
       if (line.length) {
         log(prefix, line);
       }
-    });
+    }
   }
 
   // Use an async queue so that if we receive multiple events for the same repo,
@@ -37,7 +36,8 @@ function makeExec (directory, filename, log) {
   //   to certain commits or file changes, they can do so without state.
   // - The script exec for the "last" event reliably finishes last. This is
   //   especially important for scripts that deploy services.
-  const queue = async.queue(function spawn (eventData, callback) {
+  let queue = Promise.resolve();
+  function spawn (eventData, callback) {
     const commit = eventData.commit;
     log('spawn', commit);
 
@@ -53,22 +53,23 @@ function makeExec (directory, filename, log) {
     });
     proc.on('close', function () {
       // Ignore errors
-      callback(null);
+      log('done');
+      callback();
     });
-  });
-
-  queue.drain(function () {
-    log('done');
-  });
+  }
 
   return function (data) {
     if (invalidSHA.test(data.commit)) {
-      log('Bad Request', data);
+      log('Invalid commit SHA1', data);
       return;
     }
 
     log('queue', data.commit);
-    queue.push(data);
+    queue = queue.then(function () {
+      return new Promise(function (resolve) {
+        spawn(data, resolve);
+      });
+    });
   };
 }
 
