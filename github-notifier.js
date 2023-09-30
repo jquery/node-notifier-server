@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const querystring = require('querystring');
 const util = require('util');
 const EventEmitter2 = require('eventemitter2').EventEmitter2;
 
