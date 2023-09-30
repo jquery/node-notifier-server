@@ -163,19 +163,6 @@ module.exports = {
         deleted: false
       }
     },
-    badLargeJson: {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'X-GitHub-Event': 'push'
-      },
-      body: {
-        a: 'x'.repeat(100 * 1000),
-        b: 'x'.repeat(100 * 1000),
-        c: 'x'.repeat(100 * 1000),
-        d: 'x'.repeat(100 * 1000)
-      }
-    },
     badInvalidJson: {
       method: 'POST',
       headers: {

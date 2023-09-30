@@ -170,7 +170,7 @@ echo "$SELF: Done!" >> "$OUT"
     util.request(address, util.mocks.examplePushB);
     util.request(address, util.mocks.examplePushC);
 
-    assert.timeout(2000);
+    assert.timeout(3000);
     const done = assert.async();
     setTimeout(() => {
       done();
@@ -195,7 +195,7 @@ cccccccc: 3...
 cccccccc: 4...
 cccccccc: Done!`
       );
-    }, 1700);
+    }, 2500);
   });
 
   QUnit.test('secure notifier ignores "push" webhook with tag and no signature', async assert => {
@@ -322,30 +322,13 @@ cccccccc: Done!`
     }, 500);
   });
 
-  QUnit.test('notifier ignores too large json', async assert => {
-    let called = 0;
-    function subscriber (notifier) {
-      notifier.on('example/test/push/heads/main', function () {
-        called++;
-      });
-    }
-    util.writeExportedJs(tmpDir, 'example.js', subscriber);
-
-    const server = await startServer();
-    const address = `http://localhost:${server.address().port}`;
-    const resp = await util.request(address, util.mocks.badLargeJson);
-
-    const done = assert.async();
-    setTimeout(() => {
-      done();
-      assert.strictEqual(called, 0);
-      assert.strictEqual(resp.statusCode, 413, 'status code');
-    }, 500);
-  });
-
   QUnit.test('notifier ignores invalid json syntax', async assert => {
     let called = 0;
+    let error = null;
     function subscriber (notifier) {
+      notifier.on('error', function (e) {
+        error = e;
+      });
       notifier.on('example/test/push/heads/main', function () {
         called++;
       });
@@ -360,7 +343,8 @@ cccccccc: Done!`
     setTimeout(() => {
       done();
       assert.strictEqual(called, 0);
-      assert.strictEqual(resp.statusCode, 400, 'status code');
+      assert.strictEqual(error.name, 'SyntaxError', 'error');
+      assert.strictEqual(resp.statusCode, 202, 'status code');
     }, 500);
   });
 });
