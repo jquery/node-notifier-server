@@ -29,6 +29,12 @@ nohup /etc/init.d/some-service restart &
 
 ## API
 
+## Content type
+
+Use of the `application/json` content type is required.
+
+Support for the `application/x-www-form-urlencoded` format was removed in node-notifier 4.0.0 as a security hardening measure.
+
 ### `WEBHOOK_SECRET` environment variable
 
 When operating a public notifier server, it is recommended to only use [secure webhooks](https://docs.github.com/en/developers/webhooks-and-events/webhooks/securing-your-webhooks). To enable these, set the `WEBHOOK_SECRET` environment variable on your server, and configure your source of webhooks (e.g. GitHub.com) to use these to add signatures to delivered events.
