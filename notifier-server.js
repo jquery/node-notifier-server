@@ -20,15 +20,6 @@ function makeLogger (logFn, namespace) {
 }
 
 function makeExec (directory, filename, log) {
-  function doLog (prefix, text) {
-    const parts = ('' + text).split(/\n/);
-    for (const line of parts) {
-      if (line.length) {
-        log(prefix, line);
-      }
-    }
-  }
-
   // Use an async queue so that if we receive multiple events for the same repo,
   // we let the corresponding shell scripts run serially. Scripts may assume that:
   // - Their project directory will not be operated on by other instances of self.
@@ -39,17 +30,17 @@ function makeExec (directory, filename, log) {
   let queue = Promise.resolve();
   function spawn (eventData, callback) {
     const commit = eventData.commit;
-    log('spawn', commit);
+    log('spawn ' + commit);
 
     const proc = cp.spawn(path.join(directory, filename), [commit]);
     proc.stdout.on('data', function (data) {
-      doLog('out', data);
+      log('out ' + data);
     });
     proc.stderr.on('data', function (data) {
-      doLog('err', data);
+      log('err ' + data);
     });
     proc.on('exit', function (code) {
-      log('exit', code);
+      log('exit ' + code);
     });
     proc.on('close', function () {
       // Ignore errors
@@ -60,11 +51,11 @@ function makeExec (directory, filename, log) {
 
   return function (data) {
     if (invalidSHA.test(data.commit)) {
-      log('Invalid commit SHA1', data);
+      log('Invalid commit SHA1 ' + data);
       return;
     }
 
-    log('queue', data.commit);
+    log('queue ' + data.commit);
     queue = queue.then(function () {
       return new Promise(function (resolve) {
         spawn(data, resolve);
