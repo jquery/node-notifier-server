@@ -2,13 +2,19 @@ const crypto = require('crypto');
 const util = require('util');
 const EventEmitter2 = require('eventemitter2').EventEmitter2;
 
-function Notifier (config = {}) {
+function Notifier (config = {}, allowInsecure = false) {
   EventEmitter2.call(this, {
     wildcard: true,
     delimiter: '/'
   });
 
   this.webhookSecret = config.webhookSecret || '';
+
+  // SECURITY: Server requires a secret unless explicitly started with --insecure
+  // This cannot be set via config.json, only via CLI argument.
+  if (this.webhookSecret === '' && allowInsecure === true) {
+    this.allowInsecure = true;
+  }
 
   // Pre-bind to ease usage as a callback
   this.handler = this.handler.bind(this);
@@ -51,6 +57,13 @@ Notifier.prototype.handler = function (request, response) {
 
 Notifier.prototype.process = function (req, payload) {
   const secret = this.webhookSecret;
+  if (!secret && !this.allowInsecure) {
+    // SECURITY: Fail closed. Ignore events if server started without secret unless --insecure set.
+    // Server should have refused to start, double check here just in case.
+    this.emit('error', 'Missing a secret while --insecure not set.');
+    return;
+  }
+
   if (secret) {
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(payload);

@@ -69,6 +69,7 @@ function makeExec (directory, filename, log) {
  * @param {number} opts.port
  * @param {string} opts.directory
  * @param {boolean} [opts.debug=false]
+ * @param {boolean} [opts.insecure=false]
  * @param {Function} [opts.logFn]
  * @return {Promise<http.Server>}
  */
@@ -88,6 +89,16 @@ function start (opts) {
     config.webhookSecret = process.env.WEBHOOK_SECRET;
   }
 
+  // SECURITY: Refuse to start without payload verification, unless --insecure set
+  // This cannot be set via config.json, only via CLI argument.
+  if (!config.webhookSecret && !opts.insecure) {
+    // Fail closed
+    throw new Error('Missing a secret via WEBHOOK_SECRET or config.json to verify payloads.');
+  }
+  if (config.webhookSecret && opts.insecure) {
+    throw new Error('Refusing to start with both a secret and --insecure set.');
+  }
+
   // Limits:
   // * Timeout: 5s max socket inactivity <https://nodejs.org/api/http.html#servertimeout>.
   // * Headers timeout: 60s in total [default] <https://nodejs.org/api/http.html#serverheaderstimeout>.
@@ -96,7 +107,7 @@ function start (opts) {
   const server = http.createServer();
   server.timeout = 5000;
 
-  const notifier = new Notifier(config);
+  const notifier = new Notifier(config, opts.insecure);
 
   const error = makeLogger(logFn, 'notifier-server:error');
   const log = opts.debug ? makeLogger(logFn, 'notifier-server:debug') : function () {};
@@ -159,6 +170,7 @@ function cli () {
       path.join(__dirname, 'notifier.d')
     )
     .option('--debug', 'enable verbose logging')
+    .option('--insecure', 'disable secure verification of payloads (for testing purposes)')
     // --help is included by default
     // The parse() method will exit early for help or invalid arg error.
     .parse(process.argv);

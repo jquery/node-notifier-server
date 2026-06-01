@@ -21,6 +21,8 @@ QUnit.module('notifier-server', hooks => {
 
   hooks.beforeEach(() => {
     tmpDir = util.getTmpDir();
+
+    delete process.env.WEBHOOK_SECRET;
   });
 
   hooks.afterEach(() => {
@@ -37,14 +39,14 @@ QUnit.module('notifier-server', hooks => {
     delete process.env.WEBHOOK_SECRET;
   });
 
-  async function startServer () {
-    const server = await notifier.start({ directory: tmpDir, port: 0, debug: true, logFn: logFn });
+  async function startServer (opt = {}) {
+    const server = await notifier.start({ directory: tmpDir, port: 0, debug: true, logFn: logFn, ...opt });
     servers.push(server);
     return server;
   }
 
   QUnit.test('start server', async assert => {
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     assert.strictEqual(typeof server.address().port, 'number');
   });
 
@@ -56,7 +58,7 @@ QUnit.module('notifier-server', hooks => {
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
     assert.strictEqual(called, 0);
 
-    await startServer();
+    await startServer({ insecure: true });
     assert.strictEqual(called, 1);
   });
 
@@ -76,7 +78,7 @@ QUnit.module('notifier-server', hooks => {
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     const resp = await util.request(address, util.mocks.examplePushBranch);
 
@@ -94,7 +96,7 @@ QUnit.module('notifier-server', hooks => {
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     const resp = await util.request(address, util.mocks.examplePushTag);
 
@@ -112,7 +114,7 @@ QUnit.module('notifier-server', hooks => {
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     process.env.WEBHOOK_SECRET = util.mocks.securePushTagSigned.secret;
     const resp = await util.request(address, util.mocks.securePushTagSigned);
@@ -129,7 +131,7 @@ QUnit.module('notifier-server', hooks => {
 echo "Received arg $1" > "${tmpDir}/example.out";
     `);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     util.request(address, util.mocks.examplePushBranch);
 
@@ -164,7 +166,7 @@ sleep 0.1
 echo "$SELF: Done!" >> "$OUT"
     `);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     util.request(address, util.mocks.examplePushA);
     util.request(address, util.mocks.examplePushB);
@@ -207,9 +209,9 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
+    process.env.WEBHOOK_SECRET = util.mocks.securePushTagUnsigned.secret;
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
-    process.env.WEBHOOK_SECRET = util.mocks.securePushTagUnsigned.secret;
     const resp = await util.request(address, util.mocks.securePushTagUnsigned);
 
     const done = assert.async();
@@ -229,9 +231,9 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
+    process.env.WEBHOOK_SECRET = util.mocks.securePushTagBadlySigned.secret;
     const server = await startServer();
     const address = `http://localhost:${server.address().port}`;
-    process.env.WEBHOOK_SECRET = util.mocks.securePushTagBadlySigned.secret;
     util.request(address, util.mocks.securePushTagBadlySigned);
 
     const done = assert.async();
@@ -250,7 +252,7 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     util.request(address, util.mocks.examplePushTag);
 
@@ -270,7 +272,7 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     util.request(address, util.mocks.examplePushBranch);
 
@@ -290,7 +292,7 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     util.request(address, util.mocks.examplePushBranch);
 
@@ -310,7 +312,7 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     const resp = await util.request(address, util.mocks.examplePing);
 
@@ -335,7 +337,7 @@ cccccccc: Done!`
     }
     util.writeExportedJs(tmpDir, 'example.js', subscriber);
 
-    const server = await startServer();
+    const server = await startServer({ insecure: true });
     const address = `http://localhost:${server.address().port}`;
     const resp = await util.request(address, util.mocks.badInvalidJson);
 
