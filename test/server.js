@@ -349,4 +349,25 @@ cccccccc: Done!`
       assert.strictEqual(resp.statusCode, 202, 'status code');
     }, 500);
   });
+
+  QUnit.test('notifier ignores too large json', async assert => {
+    let called = 0;
+    function subscriber (notifier) {
+      notifier.on('example/test/push/heads/main', function () {
+        called++;
+      });
+    }
+    util.writeExportedJs(tmpDir, 'example.js', subscriber);
+
+    const server = await startServer({ insecure: true });
+    const address = `http://localhost:${server.address().port}`;
+    const resp = await util.request(address, util.mocks.badLargeJson);
+
+    const done = assert.async();
+    setTimeout(() => {
+      done();
+      assert.strictEqual(called, 0);
+      assert.strictEqual(resp.statusCode, 413, 'status code');
+    }, 500);
+  });
 });

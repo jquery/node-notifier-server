@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const util = require('util');
 const EventEmitter2 = require('eventemitter2').EventEmitter2;
 
+const MAX_BODY_LENGTH = 1024 * 1024; // 1 MiB
+
 function Notifier (config = {}, allowInsecure = false) {
   EventEmitter2.call(this, {
     wildcard: true,
@@ -41,10 +43,25 @@ Notifier.prototype.handler = function (request, response) {
   let body = '';
   request.on('data', function onData (chunk) {
     body += chunk;
+
+    if (body.length > MAX_BODY_LENGTH) {
+      body = '';
+      // SECURITY: Prevent crash/DOS through OOM by limiting the body buffer we receive.
+      //
+      // If you need to raise this, remember to also raise Nginx client_max_body_size.
+      //
+      // HTTP 413 Payload Too Large
+      response.writeHead(413);
+      response.end();
+
+      request.off('data', onData);
+      request.destroy();
+    }
   });
 
   request.on('end', function onEnd () {
     // Accept the request and close the connection
+    //
     // SECURITY: We decide on and close the response regardless of,
     // and prior to, any secret-based signature validation, so as to not
     // expose details about the outcome or timing of it to external clients.
