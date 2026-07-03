@@ -240,6 +240,7 @@ module.exports = {
           statusCode: response.statusCode
         });
       });
+      req.on('error', reject);
       req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body, null, '\t'));
       req.end();
     });

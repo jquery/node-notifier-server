@@ -12,6 +12,9 @@ jobs:
       matrix:
         include:
           # Recent LTS
+          - node: 24.x
+          - node: 22.x
+          # Provided by Debian 13 Trixie LTS
           - node: 20.x
           # Provided by Debian 12 Bookworm LTS
           - node: 18.x
@@ -23,10 +26,10 @@ jobs:
     name: "Test Node.js ${{ matrix.node }} "
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
 
